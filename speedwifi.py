@@ -379,6 +379,97 @@ class ConnectivityTester:
                 
         except Exception as e:
             return TestResult(status=TestStatus.ERROR, error=str(e))
+    
+    async def test_tcping(self) -> TestResult:
+        """Test TCP/UDP connectivity (tcping) to Google's 80/443 and Cloudflare's DNS port, 4 times each, return average."""
+        results = {}
+        # TCP targets
+        tcp_targets = {
+            'ipv4': '1.1.1.1',
+            'ipv6': '2606:4700:4700::1111'
+        }
+        tcp_ports = [80, 443]
+        # UDP target (Cloudflare DNS)
+        udp_targets = {
+            'ipv4': '1.1.1.1',
+            'ipv6': '2606:4700:4700::1111'
+        }
+        udp_port = 53
+        # TCP test
+        for version, host in tcp_targets.items():
+            version_results = {}
+            for port in tcp_ports:
+                latencies = []
+                for _ in range(4):
+                    try:
+                        family = socket.AF_INET6 if version == 'ipv6' else socket.AF_INET
+                        start_time = time.time()
+                        sock = socket.socket(family, socket.SOCK_STREAM)
+                        sock.settimeout(self.config.timeout)
+                        await asyncio.get_event_loop().run_in_executor(None, sock.connect, (host, port))
+                        elapsed = (time.time() - start_time) * 1000
+                        sock.close()
+                        latencies.append(elapsed)
+                    except Exception:
+                        try:
+                            sock.close()
+                        except:
+                            pass
+                        latencies.append(None)
+                valid_latencies = [x for x in latencies if x is not None]
+                if valid_latencies:
+                    version_results[port] = {
+                        'status': 'ok',
+                        'avg_latency_ms': round(sum(valid_latencies) / len(valid_latencies), 2),
+                        'min_latency_ms': round(min(valid_latencies), 2),
+                        'max_latency_ms': round(max(valid_latencies), 2),
+                        'success_count': len(valid_latencies),
+                        'fail_count': 4 - len(valid_latencies)
+                    }
+                else:
+                    version_results[port] = {
+                        'status': 'fail',
+                        'error': 'All attempts failed'
+                    }
+            results[f'tcp_{version}'] = version_results
+        # UDP test (Cloudflare DNS)
+        for version, host in udp_targets.items():
+            latencies = []
+            for _ in range(4):
+                try:
+                    family = socket.AF_INET6 if version == 'ipv6' else socket.AF_INET
+                    sock = socket.socket(family, socket.SOCK_DGRAM)
+                    sock.settimeout(self.config.timeout)
+                    # DNS query: simple A query for example.com
+                    dns_query = b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x07example\x03com\x00\x00\x01\x00\x01'
+                    start_time = time.time()
+                    sock.sendto(dns_query, (host, udp_port))
+                    response, addr = sock.recvfrom(512)
+                    elapsed = (time.time() - start_time) * 1000
+                    sock.close()
+                    latencies.append(elapsed)
+                except Exception:
+                    try:
+                        sock.close()
+                    except:
+                        pass
+                    latencies.append(None)
+            valid_latencies = [x for x in latencies if x is not None]
+            if valid_latencies:
+                results[f'udp_{version}'] = {
+                    'status': 'ok',
+                    'avg_latency_ms': round(sum(valid_latencies) / len(valid_latencies), 2),
+                    'min_latency_ms': round(min(valid_latencies), 2),
+                    'max_latency_ms': round(max(valid_latencies), 2),
+                    'success_count': len(valid_latencies),
+                    'fail_count': 4 - len(valid_latencies)
+                }
+            else:
+                results[f'udp_{version}'] = {
+                    'status': 'fail',
+                    'error': 'All attempts failed'
+                }
+        return TestResult(status=TestStatus.OK, data=results)
 
 class SpeedTester:
     """Handles speed testing for TCP and UDP."""
@@ -840,6 +931,10 @@ class SpeedWiFi:
         print("Running UDP tests...")
         udp_result = await self.speed_tester.test_udp_speed()
         results['connectivity']['udp'] = udp_result.to_dict()
+        
+        print("Running TCPing tests...")
+        tcping_result = await self.connectivity_tester.test_tcping()
+        results['connectivity']['tcping'] = tcping_result.to_dict()
         
         return results
     
