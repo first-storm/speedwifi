@@ -967,7 +967,10 @@ def main():
                        help='Number of parallel threads for UDP speed test (default: 8)')
     parser.add_argument('--mac', action='store_true',
                        help='Show MAC addresses in output')
-    
+    parser.add_argument('--location', '-l', type=str, default=None,
+                       help='Add location info to JSON output (string or file path)')
+    parser.add_argument('--note', '-n', type=str, default=None,
+                       help='Add note to JSON output (string or file path)')
     # Specific test options
     parser.add_argument('--udp-speed', action='store_true', help='Run UDP speedtest')
     parser.add_argument('--udp-speed-ipv6', action='store_true', help='Run UDP speedtest over IPv6')
@@ -1022,8 +1025,28 @@ def main():
                 print(f"Error: {e}")
             sys.exit(1)
     
+    def _read_note_or_location(value):
+        """Helper: if value is a file path, read file, else return string."""
+        if value is None:
+            return None
+        try:
+            # Try to read file
+            with open(value, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except Exception:
+            # Not a file, treat as string
+            return value.strip()
+
     def output_result(results: Dict[str, Any], json_output: Union[bool, str]):
         """Output results in appropriate format."""
+        # Add note and location if provided
+        note_val = _read_note_or_location(args.note)
+        location_val = _read_note_or_location(args.location)
+        if note_val:
+            results['note'] = note_val
+        if location_val:
+            results['location'] = location_val
+
         if json_output:
             json_str = json.dumps(results, indent=2)
             if isinstance(json_output, str):
