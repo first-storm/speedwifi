@@ -1,0 +1,32 @@
+# Python cache and bytecode
+__pycache__/
+venv/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code settings
+.vscode/
+
+# Test result files
+test-*.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+*.env
+
+# Output directories
+output/
+
+# Logs
+*.log
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore requirements.txt backup
+requirements*.bak
